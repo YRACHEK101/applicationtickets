@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node backend/index.js",
     "dev": "vite",
-    "seed": "node seed-admin.js",
+    "seed": "node backend/seed-admin.js",
     "seed:postgres": "node backend/src/scripts/seed-postgres.js",
     "test:postgres": "node backend/src/scripts/test-postgres-connection.js",
     "create:postgres-tables": "node backend/src/scripts/create-postgres-tables.js",
@@ -14,7 +14,11 @@
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node server/index.js"
+    "server": "node backend/index.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "docker:logs": "docker-compose logs -f"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
