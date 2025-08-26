@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import v1Routes from './routes/v1/index.js';
 import connectDB from './src/config/database.js';
+import config from './src/config/index.js';
 
 import http from 'http';
 import { Server } from 'socket.io';
@@ -13,7 +14,15 @@ import { Server } from 'socket.io';
 // Load environment variables
 dotenv.config();
 console.log('JWT_SECRET:', process.env.JWT_SECRET);
-console.log('MONGODB_URI:', process.env.MONGODB_URI);
+
+// Log database connection info based on selected database
+if (config.usePostgres) {
+  console.log('Using PostgreSQL database');
+  console.log(`PostgreSQL connection: ${config.postgresHost}:${config.postgresPort}/${config.postgresDatabase}`);
+} else {
+  console.log('Using MongoDB database');
+  console.log('MONGODB_URI:', process.env.MONGODB_URI);
+}
 
 // Set up __dirname in ES module
 const __filename = fileURLToPath(import.meta.url);

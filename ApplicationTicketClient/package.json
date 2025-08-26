@@ -9,6 +9,8 @@
     "seed": "node seed-admin.js",
     "seed:postgres": "node backend/src/scripts/seed-postgres.js",
     "test:postgres": "node backend/src/scripts/test-postgres-connection.js",
+    "create:postgres-tables": "node backend/src/scripts/create-postgres-tables.js",
+    "setup:postgres": "npm run create:postgres-tables && npm run seed:postgres",
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

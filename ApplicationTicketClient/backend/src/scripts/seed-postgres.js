@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { sequelize } from '../config/database.js';
-import initModels from '../models/sequelize/init-models.js';
+import { Sequelize } from 'sequelize';
 import config from '../config/index.js';
+import initModels from '../models/sequelize/init-models.js';
 
 // Function to seed admin user
 async function seedAdminUser(models) {
@@ -41,10 +41,20 @@ async function seedAdminUser(models) {
 // Main function to run all seed operations
 async function seedDatabase() {
   try {
-    // Connect to PostgreSQL
-    await sequelize.authenticate();
-    console.log('Connected to PostgreSQL database');
+    console.log('Seeding PostgreSQL database...');
+    console.log(`Connection parameters: ${config.postgresHost}:${config.postgresPort}/${config.postgresDatabase}`);
+    
+    const sequelize = new Sequelize(config.postgresDatabase, config.postgresUser, config.postgresPassword, {
+      host: config.postgresHost,
+      port: config.postgresPort,
+      dialect: 'postgres',
+      logging: console.log
+    });
 
+    // Test connection
+    await sequelize.authenticate();
+    console.log('PostgreSQL connection has been established successfully.');
+    
     // Initialize models
     const models = initModels(sequelize);
     console.log('Models initialized');
@@ -61,8 +71,9 @@ async function seedDatabase() {
 }
 
 // Run the seed function if this script is executed directly
-if (require.main === module) {
+if (import.meta.url === new URL(import.meta.url).href) {
   seedDatabase();
 }
 
 export { seedAdminUser, seedDatabase };
+export default seedDatabase;
