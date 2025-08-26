@@ -7,6 +7,8 @@
     "start": "node server/index.js",
     "dev": "vite",
     "seed": "node seed-admin.js",
+    "seed:postgres": "node backend/src/scripts/seed-postgres.js",
+    "test:postgres": "node backend/src/scripts/test-postgres-connection.js",
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

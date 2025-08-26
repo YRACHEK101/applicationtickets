@@ -1,6 +1,23 @@
 version: "3.9"
 
 services:
+  # PostgreSQL service (new primary database)
+  postgres-db:
+    image: postgres:15
+    container_name: ticketapp_postgres_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=app_ticket_db
+    networks:
+      - ticket-network
+    restart: unless-stopped
+      
+  # Legacy MongoDB service (kept for backward compatibility)
   mongo-db:
     image: mongo:4.4
     container_name: ticketapp_mongo_local
@@ -25,7 +42,15 @@ services:
       dockerfile: server/Dockerfile
     environment:
       - JWT_SECRET=your-local-secret-key
+      # Database configuration
       - MONGODB_URI=mongodb://mongo-db:27017/app_ticket_db
+      - USE_POSTGRES=true
+      - POSTGRES_HOST=postgres-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=app_ticket_db
+      # Other environment variables
       - NODE_ENV=development
       - PORT=5000
       - CORS_CREDENTIALS=true
@@ -39,6 +64,7 @@ services:
     networks:
       - ticket-network
     depends_on:
+      - postgres-db
       - mongo-db
     restart: unless-stopped
 
@@ -62,5 +88,7 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data_local:
+    name: ticketapp_postgres_data_local
   mongo_data_local:
     name: ticketapp_mongo_data_local

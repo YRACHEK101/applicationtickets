@@ -1,11 +1,11 @@
 import express from 'express';
 import cors from 'cors';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import v1Routes from './routes/v1/index.js';
+import connectDB from './src/config/database.js';
 
 import http from 'http';
 import { Server } from 'socket.io';
@@ -72,16 +72,10 @@ app.set('io', io);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB
-const connectionString = process.env.MONGODB_URI || process.env.MONGO_URI;
-if (!connectionString) {
-  console.error('MONGODB_URI environment variable is not defined.');
-  process.exit(1);
-}
-
-mongoose.connect(connectionString)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+// Connect to database (MongoDB or PostgreSQL based on config)
+connectDB()
+  .then(() => console.log('✅ Database connection established'))
+  .catch((err) => console.error('❌ Database connection error:', err));
 
 // Serve static uploads
 app.use('/server/uploads', express.static(path.join(__dirname, 'server', 'uploads')));
