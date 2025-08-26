@@ -1,0 +1,142 @@
+name: Application Ticket Client Pipeline VLAN Migration
+
+trigger:
+  branches:
+    include:
+      - master
+      - development
+
+pr:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: "ubuntu-22.04"
+
+variables:
+  - group: APPTicket-SECRET1
+  - name: NODE_VERSION
+    value: "19.x"
+  - name: npm_config_cache
+    value: $(Pipeline.Workspace)/.npm
+  - name: sonarQubeServiceConnection
+    value: "SonarQubeAPPTC"
+
+stages:
+  # === 🧪 Build & Test ===
+  - stage: Build
+    displayName: "Build & Tests"
+    jobs:
+      - job: BuildAndTest
+        displayName: "Build des apps Frontend & Backend"
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "$(NODE_VERSION)"
+            displayName: "Installer Node.js"
+
+          - task: Cache@2
+            inputs:
+              key: 'npm | "$(Agent.OS)"'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: $(npm_config_cache)
+            displayName: "Cache npm"
+            continueOnError: true
+
+          - script: |
+              cd server && npm install
+              cd ../src && npm install
+            displayName: "Installer dépendances frontend & backend"
+
+          - script: |
+              cd server
+              echo "Lancer les tests backend..."
+              npm run test || true
+            displayName: "Tests backend"
+            continueOnError: true
+
+          - script: |
+              echo "Structure projet après installation"
+              find $(Build.SourcesDirectory) -type f
+            displayName: "Afficher contenu projet"
+          - script: |
+              echo "Supprimer SONARQUBE_SCANNER_PARAMS"
+              echo "##vso[task.setvariable variable=SONARQUBE_SCANNER_PARAMS;issecret=true]{}"
+            displayName: "Neutraliser paramètres sonar.branch.name"
+
+          - task: SonarQubePrepare@7
+            inputs:
+              SonarQube: "$(sonarQubeServiceConnection)"
+              scannerMode: "CLI"
+              configMode: "manual"
+              cliProjectKey: "ApplicationTicketClient"
+              cliProjectName: "ApplicationTicketClient"
+              cliSources: "."
+              extraProperties: |
+                sonar.projectKey=ApplicationTicketClient
+                sonar.projectName=ApplicationTicketClient
+                sonar.sourceEncoding=UTF-8
+                sonar.sources=.
+                sonar.exclusions=**/node_modules/**,**/dist/**,**/*.png,**/*.jpg,**/*.svg
+                sonar.qualitygate.wait=false
+            displayName: "Préparer SonarQube"
+
+          - task: SonarQubeAnalyze@7
+            displayName: "Analyser SonarQube"
+
+          - task: SonarQubePublish@7
+            inputs:
+              pollingTimeoutSec: "300"
+            displayName: "Publier analyse SonarQube"
+
+  # === 📊 Rapport HTML/PDF ===
+  - stage: rapport
+    displayName: "Rapport HTML SonarQube"
+    jobs:
+      - job: GenRapport
+        steps:
+          - script: |
+              cd Deployment/scripts
+              npm install blob
+              npm install
+            displayName: "Installer dépendances rapport"
+
+          - script: |
+              cd Deployment/scripts
+              node generate-report.js
+            displayName: "Générer rapport Sonar"
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: "$(Build.SourcesDirectory)/Deployment/output"
+              ArtifactName: "sonar-reports"
+              publishLocation: "Container"
+            displayName: "Publier rapport"
+
+  # === 🚀 Déploiement VM OVH VLAN ===
+  - stage: Deploy
+    displayName: "Déploiement avec Ansible sur OVH VM"
+    jobs:
+      - job: DeployVLAN
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals LiadtechMernStackDemo
+
+        steps:
+          - script: |
+              echo "📁 Vérification Ansible Deployment"
+              ls -la $(System.DefaultWorkingDirectory)/Deployment/ansible
+              echo "Contenu inventaire :"
+              cat $(System.DefaultWorkingDirectory)/Deployment/ansible/inventory.ini
+            displayName: "🔍 Check fichiers Ansible"
+
+          - task: Bash@3
+            displayName: "🚀 Exécuter playbook Ansible"
+            inputs:
+              targetType: "inline"
+              workingDirectory: "$(System.DefaultWorkingDirectory)/Deployment/ansible"
+              script: |
+                ansible-playbook -i inventory.ini playbook.yml -e "source_dir=$(Build.SourcesDirectory)" -u mdraoui -b -vvv

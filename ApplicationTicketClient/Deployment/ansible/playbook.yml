@@ -1,0 +1,115 @@
+---
+- name: Déploiement des conteneurs ApplicationTicket (Production)
+  hosts: remote
+  become: true
+
+  vars:
+    source_dir: /data/LiadtechMernStackApplicationTicket
+    project_dir: /data/ApplicationTicket
+    compose_path: "{{ project_dir }}/docker-compose.yml"
+
+  tasks:
+    - name: Vérifier quelle commande Docker Compose est disponible
+      shell: |
+        if docker compose version >/dev/null 2>&1; then
+          echo "docker compose"
+        elif docker-compose version >/dev/null 2>&1; then
+          echo "docker-compose"
+        else
+          echo "none"
+        fi
+      register: compose_cmd_result
+      changed_when: false
+
+    - name: Échouer si Docker Compose est indisponible
+      fail:
+        msg: "❌ Aucune commande docker compose ou docker-compose n’est disponible sur la VM."
+      when: compose_cmd_result.stdout == "none"
+
+    - name: Définir la commande docker-compose détectée
+      set_fact:
+        compose_cmd: "{{ compose_cmd_result.stdout }}"
+
+    - name: Créer le dossier projet ApplicationTicket
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        owner: mdraoui
+        group: mdraoui
+        mode: "0755"
+
+    - name: Synchroniser le projet vers la VM (exclure les artefacts inutiles)
+      synchronize:
+        src: "{{ source_dir }}/"
+        dest: "{{ project_dir }}/"
+        recursive: yes
+        delete: yes
+        rsync_opts:
+          - "--exclude=node_modules/"
+          - "--exclude=.next/"
+          - "--exclude=dist/"
+          - "--exclude=.turbo/"
+          - "--exclude=.DS_Store"
+          - "--exclude=Thumbs.db"
+      delegate_to: localhost
+
+    - name: Vérifier l'existence de docker-compose.yml
+      stat:
+        path: "{{ compose_path }}"
+      register: compose_file
+
+    - name: Stopper les anciens conteneurs (si fichier présent)
+      shell: "{{ compose_cmd }} -p appticket down || true"
+      args:
+        chdir: "{{ project_dir }}"
+      when: compose_file.stat.exists
+
+    - name: Vérifier la syntaxe de la configuration Docker Compose
+      shell: "{{ compose_cmd }} config"
+      args:
+        chdir: "{{ project_dir }}"
+      when: compose_file.stat.exists
+
+    - name: Démarrer les conteneurs Docker ApplicationTicket
+      shell: |
+        echo "🔍 Déploiement de {{ compose_path }}"
+        export COMPOSE_PROJECT_NAME=appticket
+        {{ compose_cmd }} up -d --build --remove-orphans
+        sleep 10
+        echo "🔎 État des conteneurs :"
+        docker ps -a
+      args:
+        chdir: "{{ project_dir }}"
+        executable: /bin/bash
+      register: docker_up_result
+      ignore_errors: true
+
+    - name: Afficher l’état du déploiement Docker
+      debug:
+        var: docker_up_result.stdout_lines
+
+    - name: Logs backend (server) en cas d’échec
+      shell: "{{ compose_cmd }} logs server | tail -n 100"
+      args:
+        chdir: "{{ project_dir }}"
+      when: docker_up_result.rc != 0
+      register: backend_logs
+      ignore_errors: true
+
+    - name: Debug logs backend
+      debug:
+        var: backend_logs.stdout_lines
+      when: docker_up_result.rc != 0
+
+    - name: Logs frontend (src) en cas d’échec
+      shell: "{{ compose_cmd }} logs src | tail -n 100"
+      args:
+        chdir: "{{ project_dir }}"
+      when: docker_up_result.rc != 0
+      register: frontend_logs
+      ignore_errors: true
+
+    - name: Debug logs frontend
+      debug:
+        var: frontend_logs.stdout_lines
+      when: docker_up_result.rc != 0
